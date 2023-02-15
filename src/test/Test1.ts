@@ -5,7 +5,6 @@ console.log("=== Test 1 ===");
 
 const position = new Signal({x: 0, y: 0});
 observe(() => {
-  position.x
   console.log("pos", position.value);
   // PB : on a des proxys
 });

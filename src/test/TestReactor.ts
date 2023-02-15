@@ -5,7 +5,7 @@ console.log("=== TestReactor ===");
 
 const reactor = new Reactor({pos: {x: 0, y: 0}});
 const observer = new Observer(() => {
-  console.log('position is ', reactor.pos.x)
+  console.log('position is ', reactor.pos)
 });
 observer();
-reactor.pos = {x: 1, y: 1};
+reactor.pos.x = 1;

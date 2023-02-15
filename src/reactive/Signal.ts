@@ -8,13 +8,16 @@ class SignalImpl<T> {
 
   private readonly observers: Set<Observer> = new Set();
 
-  constructor(initialValue: T) {
+  private readonly _parent: SignalImpl<any> | null;
+
+  constructor(initialValue: T, parent?: SignalImpl<any>) {
+    this._parent = parent || null;
     this._isValueObject = typeof initialValue === 'object' && initialValue !== null;
 
     this._value = initialValue;
 
     if (this._isValueObject) {
-      this._signalValue = objectToSignal(initialValue as any);
+      this._signalValue = objectToSignal(initialValue as any, this);
 
       return new Proxy(this, {
         get: (target: SignalImpl<T>, prop: string | symbol) => {
@@ -29,7 +32,12 @@ class SignalImpl<T> {
           const value = target._value as any;
           if (prop in signalValue) {
             value[prop] = newValue;
-            return signalValue[prop].value = newValue;
+            const ret = signalValue[prop].value = newValue;
+            // console.log("set child", prop, newValue);
+            // for (const dependent of [...target.observers]) {
+            //   dependent.trigger();
+            // }
+            return ret;
           }
           return (target as any)[prop] = newValue;
         }
@@ -46,6 +54,13 @@ class SignalImpl<T> {
       });
     }
   }
+
+  private _updated() {
+    for (const dependent of [...this.observers]) {
+      dependent.trigger();
+    }
+  }
+
 
   private removeSelf() {
 
@@ -71,7 +86,7 @@ class SignalImpl<T> {
     return output as T;
   }
 
-  public set(newValue: T) {
+  public set(newValue: T, propagateToParents: boolean = true): T {
     // Avoid triggering observers if same value is written TODO : keep it?
     if (this._value === newValue) {
       return this._value;
@@ -85,7 +100,7 @@ class SignalImpl<T> {
         value[key] = (newValue as any)[key];
       }
       for (const key in signalValue) {
-        signalValue[key].value = (newValue as any)[key];
+        signalValue[key].set((newValue as any)[key], false);
       }
     } else {
       this._signalValue = newValue as SignalValue<T>;
@@ -94,6 +109,9 @@ class SignalImpl<T> {
 
     for (const dependent of [...this.observers]) {
       dependent.trigger();
+    }
+    if(propagateToParents && this._parent) {
+      this._parent._updated();
     }
 
     return newValue;
@@ -108,12 +126,12 @@ class SignalImpl<T> {
   }
 }
 
-function objectToSignal<T extends object>(initialValue: T): SignalValue<T> {
+function objectToSignal<T extends object>(initialValue: T, parent: SignalImpl<T>): SignalValue<T> {
   const output: any = {};
   for (const key in initialValue) {
     if (initialValue.hasOwnProperty(key)) {
       const element = initialValue[key];
-      output[key] = new SignalImpl(element);
+      output[key] = new SignalImpl(element, parent);
     }
   }
   return output;
