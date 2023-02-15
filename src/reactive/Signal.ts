@@ -1,6 +1,12 @@
 import dependencyStack from "./dependencyStack";
 import type Observer from "./Observer";
 
+/** TODO : séparer implémentation en PrimitiveSignal<T extends number | string | boolean | Function> et ObjectSignal<T extends object>
+ * ObjectSignal possède des attributs : _properties (représentant l'objet) et _propertiesSignals
+ * PrimitiveSignal possède un attribut : _value
+ * Les deux sont conformes à une interface Signal<T> { value: T; }
+ */
+
 class SignalImpl<T> {
   private _signalValue: SignalValue<T>;
   private _value: T;
