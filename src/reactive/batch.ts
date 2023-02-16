@@ -27,7 +27,7 @@ export module Batch {
   }
 }
 
-export function batch(callback: () => void) {
+export default function batch(callback: () => void) {
   Batch.start();
   callback();
   Batch.end();

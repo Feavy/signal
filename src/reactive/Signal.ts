@@ -1,6 +1,6 @@
 import Observer from "./Observer";
 import ObserverStack from "./ObserverStack";
-import {batch, Batch} from "./batch";
+import {Batch} from "./batch";
 
 abstract class AbstractSignal<T> {
   protected _value: T;
