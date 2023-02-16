@@ -33,6 +33,8 @@ export default class Observer {
   }
 }
 
+export type Observable<T> = T;
+
 export function observe(callback: () => void) {
   const observer = new Observer(callback);
   observer.trigger();

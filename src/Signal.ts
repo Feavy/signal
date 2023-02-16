@@ -1,4 +1,4 @@
-import Observer from "./Observer";
+import Observer, {Observable} from "./Observer";
 import ObserverStack from "./ObserverStack";
 import {Batch} from "./batch";
 
@@ -15,7 +15,7 @@ abstract class AbstractSignal<T> {
   }
 
   public abstract set value(newValue: T);
-  public abstract get value(): T;
+  public abstract get value(): Observable<T>;
 
   protected addObserver(observer: Observer) {
     this.observers.push(observer);
@@ -111,6 +111,12 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
   public set value(newValue: T) {
     debug("set this value", newValue);
 
+    const observer = ObserverStack.current();
+    if (observer) {
+      console.warn("Cannot reassign observed signal inside observer");
+      this.removeObserver(observer);
+    }
+
     const newBatch = !Batch.isBatching();
 
     // Only start a new batch if we are not already batching (in case of nested signals)
@@ -167,6 +173,13 @@ class LeafSignal<T extends number | string | boolean | Function> extends Abstrac
 
   public set value(newValue: T) {
     debug("set this value", newValue);
+
+    const observer = ObserverStack.current();
+    if (observer) {
+      console.warn("Cannot reassign observed signal inside observer");
+      this.removeObserver(observer);
+    }
+
     this._value = newValue;
     this.triggerObservers();
   }
