@@ -2,6 +2,8 @@ import Observer from "./Observer";
 import ObserverStack from "./ObserverStack";
 import {Batch} from "./batch";
 
+const debug = (...args: any[]) => {}; // console.log;
+
 abstract class AbstractSignal<T> {
   protected _value: T;
   protected _parent?: NodeSignal<any>;
@@ -68,11 +70,11 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
       get: (target: NodeSignal<T>, prop: string | symbol) => {
         const signal = target._properties.get(prop as keyof T);
         if (signal instanceof NodeSignal) {
-          console.log("get node prop", prop);
+          debug("get node prop", prop);
           signal.value;
           return signal;
         } else if (signal instanceof LeafSignal) {
-          console.log("get leaf prop", prop);
+          debug("get leaf prop", prop);
           return signal!.value;
         }
         return (target as any)[prop];
@@ -81,7 +83,7 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
         const signal = target._properties.get(prop as keyof T);
         const value = target._value as any;
         if (signal) {
-          console.log("set", prop, newValue);
+          debug("set", prop, newValue);
           value[prop] = newValue;
           return signal.value = newValue;
         }
@@ -107,7 +109,7 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
   }
 
   public set value(newValue: T) {
-    console.log("set this value", newValue);
+    debug("set this value", newValue);
 
     const newBatch = !Batch.isBatching();
 
@@ -123,16 +125,16 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
     if (newBatch) Batch.end();
   }
 
-  public get value(): T & {unwrapped: T} {
-    console.log("get this value", this._value);
+  public get value(): T & {unwrapped?: T} {
+    debug("get this value", this._value);
 
     const observer = ObserverStack.current();
     if (observer) {
       this.removeParentObserver(observer);
       this.addObserver(observer);
     }
-    console.log("this", this);
-    return this._proxy as unknown as T & {unwrapped: T};
+    debug("this", this);
+    return this._proxy as unknown as T & {unwrapped?: T};
   }
 
   public get unwrapped() {
@@ -164,7 +166,7 @@ class LeafSignal<T extends number | string | boolean | Function> extends Abstrac
   }
 
   public set value(newValue: T) {
-    console.log("set this value", newValue);
+    debug("set this value", newValue);
     this._value = newValue;
     this.triggerObservers();
   }
