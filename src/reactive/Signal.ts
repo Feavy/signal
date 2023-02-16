@@ -25,12 +25,14 @@ abstract class AbstractSignal<T> {
   protected removeParentObserver(observer: Observer) {
     if (this._parent) {
       this._parent.removeObserver(observer);
-      this._parent.removeParentObserver(observer);
     }
   }
 
   protected removeObserver(observer: Observer) {
-    this.observers = this.observers.filter(o => o !== observer);
+    const index = this.observers.indexOf(observer);
+    if (index !== -1) {
+      this.observers.splice(index, 1);
+    }
   }
 
   public removeDuplicatedObservers() {
@@ -91,6 +93,13 @@ class SignalNode<T extends object> extends AbstractSignal<T> {
     }
   }
 
+  protected removeObserver(observer: Observer) {
+    super.removeObserver(observer);
+    for (const signal of this._properties.values()) {
+      signal.removeObserver(observer);
+    }
+  }
+
   public set value(newValue: T) {
     console.log("set this value", newValue);
 
@@ -111,11 +120,8 @@ class SignalNode<T extends object> extends AbstractSignal<T> {
   public get value(): T {
     const observer = ObserverStack.current();
     if (observer) {
-      this.addObserver(observer);
       this.removeParentObserver(observer);
-      for (const signal of this._properties.values()) {
-        signal.addObserver(observer);
-      }
+      this.addObserver(observer);
     }
     return this._value;
   }
