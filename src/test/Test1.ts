@@ -1,15 +1,27 @@
 import Signal from "../reactive/Signal";
 import {observe} from "../reactive/Observer";
 
+// function unproxy<T extends object>(sig: Signal<T>): T {
+//   const ret = {} as T;
+//   for (const key in sig._value) {
+//     const value = sig._value[key];
+//     if (typeof value === "object" && value !== null) {
+//       ret[key] = unproxy(value);
+//     } else {
+//       ret[key] = value;
+//     }
+//   }
+//   return ret;
+// }
+
 console.log("=== Test 1 ===");
 
-const position = new Signal({x: 0, y: 0});
+const state = new Signal({position: {x: "x_val", y: "y_val"}});
 observe(() => {
-  console.log("pos", position.value);
-  // PB : on a des proxys
+  console.log("-> observer triggered", state.position);
 });
-position.value = {x: 1, y: 1};
-position.x = 2;
+state.position = {x: "1", y: "1"};
+state.position.x = "2";
 
 const health = new Signal(10);
 observe(() => {
