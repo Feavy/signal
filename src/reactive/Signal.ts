@@ -183,8 +183,12 @@ class NodeOrLeafSignal<T> extends AbstractSignal<T> {
   }
 }
 
-type Signal<T> = T extends object ? SignalNode<T> & T
+type Signal<T> = T extends object ? NestedSignal<T>
     : T extends number | string | boolean | Function ? SignalLeaf<T>
+        : unknown;
+
+type NestedSignal<T> = T extends object ? SignalNode<T> & { [K in keyof T]: T[K] & {value?: T[K]} }
+    : T extends number | string | boolean | Function ? T
         : unknown;
 
 const Signal: new <T>(data: T) => Signal<T> = NodeOrLeafSignal as any;
