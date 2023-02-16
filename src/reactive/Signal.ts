@@ -1,5 +1,6 @@
 import Observer from "./Observer";
 import ObserverStack from "./ObserverStack";
+import {batch, Batch} from "./batch";
 
 abstract class AbstractSignal<T> {
   protected _value: T;
@@ -11,16 +12,20 @@ abstract class AbstractSignal<T> {
     this._parent = parent;
   }
 
+  protected abstract debug(indent: string): void;
+
   public abstract set value(newValue: T);
   public abstract get value(): T;
 
   protected addObserver(observer: Observer) {
     this.observers.push(observer);
+    observer.observe(this);
   }
 
   protected removeParentObserver(observer: Observer) {
     if (this._parent) {
       this._parent.removeObserver(observer);
+      this._parent.removeParentObserver(observer);
     }
   }
 
@@ -33,7 +38,11 @@ abstract class AbstractSignal<T> {
   }
 
   protected triggerObservers() {
-    this.observers.forEach(observer => observer.trigger());
+    if (Batch.isBatching()) {
+      Batch.addAll(this.observers);
+    } else {
+      this.observers.forEach(observer => observer.trigger());
+    }
   }
 }
 
@@ -52,8 +61,11 @@ class SignalNode<T extends object> extends AbstractSignal<T> {
       get: (target: SignalNode<T>, prop: string | symbol) => {
         const signal = target._properties.get(prop as keyof T);
         if (signal instanceof SignalNode) {
+          console.log("get", prop);
+          signal.value;
           return signal;
-        }else if(signal instanceof SignalLeaf) {
+        } else if (signal instanceof SignalLeaf) {
+          console.log("get", prop);
           return signal!.value;
         }
         return (target as any)[prop];
@@ -62,6 +74,7 @@ class SignalNode<T extends object> extends AbstractSignal<T> {
         const signal = target._properties.get(prop as keyof T);
         const value = target._value as any;
         if (signal) {
+          console.log("set", prop, newValue);
           value[prop] = newValue;
           return signal.value = newValue;
         }
@@ -70,22 +83,50 @@ class SignalNode<T extends object> extends AbstractSignal<T> {
     })
   }
 
+  protected addObserver(observer: Observer) {
+    super.addObserver(observer);
+    observer.observe(this);
+    for (const signal of this._properties.values()) {
+      signal.addObserver(observer);
+    }
+  }
+
   public set value(newValue: T) {
-    for(const key in newValue) {
+    console.log("set this value", newValue);
+
+    const newBatch = !Batch.isBatching();
+
+    // Only start a new batch if we are not already batching (in case of nested signals)
+    if (newBatch) Batch.start();
+
+    for (const key in newValue) {
       const value = newValue[key];
+      this._value[key] = value;
       this._properties.get(key)!.value = value;
     }
-    this.triggerObservers();
+
+    if (newBatch) Batch.end();
   }
 
   public get value(): T {
     const observer = ObserverStack.current();
     if (observer) {
       this.addObserver(observer);
-      observer.observe(this);
       this.removeParentObserver(observer);
+      for (const signal of this._properties.values()) {
+        signal.addObserver(observer);
+      }
     }
     return this._value;
+  }
+
+  protected debug(indent: string = "") {
+    console.log(indent + "value: ", this._value);
+    console.log(indent + "observers: ", this.observers.length);
+    for (const [key, signal] of this._properties) {
+      console.log(indent + " " + (key as string) + " :");
+      signal.debug(indent + "  ");
+    }
   }
 }
 
@@ -98,22 +139,27 @@ class SignalLeaf<T extends number | string | boolean | Function> extends Abstrac
     const observer = ObserverStack.current();
     if (observer) {
       this.addObserver(observer);
-      observer.observe(this);
       this.removeParentObserver(observer);
     }
     return this._value;
   }
 
   public set value(newValue: T) {
+    console.log("set this value", newValue);
     this._value = newValue;
     this.triggerObservers();
+  }
+
+  protected debug(indent: string = "") {
+    console.log(indent + "value: " + this._value);
+    console.log(indent + "observers: ", this.observers.length);
   }
 }
 
 class NodeOrLeafSignal<T> extends AbstractSignal<T> {
   public constructor(initialValue: T, parent?: SignalNode<any>) {
     super(initialValue, parent);
-    if(typeof initialValue === 'object' && initialValue !== null) {
+    if (typeof initialValue === 'object' && initialValue !== null) {
       //@ts-ignore
       return new SignalNode(initialValue, parent);
     } else {
@@ -131,9 +177,9 @@ class NodeOrLeafSignal<T> extends AbstractSignal<T> {
   }
 }
 
-type Signal<T> =  T extends object ? SignalNode<T> & T
-                : T extends number | string | boolean | Function ? SignalLeaf<T>
-                : unknown;
+type Signal<T> = T extends object ? SignalNode<T> & T
+    : T extends number | string | boolean | Function ? SignalLeaf<T>
+        : unknown;
 
 const Signal: new <T>(data: T) => Signal<T> = NodeOrLeafSignal as any;
 export default Signal;
