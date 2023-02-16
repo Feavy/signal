@@ -4,15 +4,13 @@ import {Batch} from "./batch";
 
 abstract class AbstractSignal<T> {
   protected _value: T;
-  protected _parent?: SignalNode<any>;
+  protected _parent?: NodeSignal<any>;
   private observers: Observer[] = [];
 
-  protected constructor(initialValue: T, parent?: SignalNode<any>) {
+  protected constructor(initialValue: T, parent?: NodeSignal<any>) {
     this._value = initialValue;
     this._parent = parent;
   }
-
-  protected abstract debug(indent: string): void;
 
   public abstract set value(newValue: T);
   public abstract get value(): T;
@@ -24,6 +22,7 @@ abstract class AbstractSignal<T> {
 
   protected removeParentObserver(observer: Observer) {
     if (this._parent) {
+      //@ts-ignore
       this._parent.removeObserver(observer);
     }
   }
@@ -46,12 +45,18 @@ abstract class AbstractSignal<T> {
       this.observers.forEach(observer => observer.trigger());
     }
   }
+
+  public debug(indent: string) {
+    console.log(indent + "value: ", this._value);
+    console.log(indent + "observers: ", this.observers.length);
+  }
 }
 
-class SignalNode<T extends object> extends AbstractSignal<T> {
+class NodeSignal<T extends object> extends AbstractSignal<T> {
   private readonly _properties: Map<keyof T, Signal<any>> = new Map();
+  private readonly _proxy;
 
-  public constructor(initialValue: T, parent?: SignalNode<any>) {
+  public constructor(initialValue: T, parent?: NodeSignal<any>) {
     super(initialValue, parent);
 
     for (const key in initialValue) {
@@ -59,20 +64,20 @@ class SignalNode<T extends object> extends AbstractSignal<T> {
       this._properties.set(key, new NodeOrLeafSignal(value, this));
     }
 
-    return new Proxy(this, {
-      get: (target: SignalNode<T>, prop: string | symbol) => {
+    this._proxy = new Proxy(this, {
+      get: (target: NodeSignal<T>, prop: string | symbol) => {
         const signal = target._properties.get(prop as keyof T);
-        if (signal instanceof SignalNode) {
-          console.log("get", prop);
+        if (signal instanceof NodeSignal) {
+          console.log("get node prop", prop);
           signal.value;
           return signal;
-        } else if (signal instanceof SignalLeaf) {
-          console.log("get", prop);
+        } else if (signal instanceof LeafSignal) {
+          console.log("get leaf prop", prop);
           return signal!.value;
         }
         return (target as any)[prop];
       },
-      set(target: SignalNode<T>, prop: string | symbol, newValue: any, _: any): boolean {
+      set(target: NodeSignal<T>, prop: string | symbol, newValue: any, _: any): boolean {
         const signal = target._properties.get(prop as keyof T);
         const value = target._value as any;
         if (signal) {
@@ -82,7 +87,8 @@ class SignalNode<T extends object> extends AbstractSignal<T> {
         }
         return (target as any)[prop] = newValue;
       }
-    })
+    });
+    return this._proxy;
   }
 
   protected addObserver(observer: Observer) {
@@ -117,18 +123,25 @@ class SignalNode<T extends object> extends AbstractSignal<T> {
     if (newBatch) Batch.end();
   }
 
-  public get value(): T {
+  public get value(): T & {unwrapped: T} {
+    console.log("get this value", this._value);
+
     const observer = ObserverStack.current();
     if (observer) {
       this.removeParentObserver(observer);
       this.addObserver(observer);
     }
+    console.log("this", this);
+    return this._proxy as unknown as T & {unwrapped: T};
+  }
+
+  public get unwrapped() {
+    this.value;
     return this._value;
   }
 
-  protected debug(indent: string = "") {
-    console.log(indent + "value: ", this._value);
-    console.log(indent + "observers: ", this.observers.length);
+  public debug(indent: string = "") {
+    super.debug(indent);
     for (const [key, signal] of this._properties) {
       console.log(indent + " " + (key as string) + " :");
       signal.debug(indent + "  ");
@@ -136,16 +149,16 @@ class SignalNode<T extends object> extends AbstractSignal<T> {
   }
 }
 
-class SignalLeaf<T extends number | string | boolean | Function> extends AbstractSignal<T> {
-  public constructor(initialValue: T, parent?: SignalNode<any>) {
+class LeafSignal<T extends number | string | boolean | Function> extends AbstractSignal<T> {
+  public constructor(initialValue: T, parent?: NodeSignal<any>) {
     super(initialValue, parent);
   }
 
   public get value(): T {
     const observer = ObserverStack.current();
     if (observer) {
-      this.addObserver(observer);
       this.removeParentObserver(observer);
+      this.addObserver(observer);
     }
     return this._value;
   }
@@ -155,22 +168,17 @@ class SignalLeaf<T extends number | string | boolean | Function> extends Abstrac
     this._value = newValue;
     this.triggerObservers();
   }
-
-  protected debug(indent: string = "") {
-    console.log(indent + "value: " + this._value);
-    console.log(indent + "observers: ", this.observers.length);
-  }
 }
 
 class NodeOrLeafSignal<T> extends AbstractSignal<T> {
-  public constructor(initialValue: T, parent?: SignalNode<any>) {
+  public constructor(initialValue: T, parent?: NodeSignal<any>) {
     super(initialValue, parent);
     if (typeof initialValue === 'object' && initialValue !== null) {
       //@ts-ignore
-      return new SignalNode(initialValue, parent);
+      return new NodeSignal(initialValue, parent);
     } else {
       //@ts-ignore
-      return new SignalLeaf(initialValue, parent);
+      return new LeafSignal(initialValue, parent);
     }
   }
 
@@ -184,10 +192,10 @@ class NodeOrLeafSignal<T> extends AbstractSignal<T> {
 }
 
 type Signal<T> = T extends object ? NestedSignal<T>
-    : T extends number | string | boolean | Function ? SignalLeaf<T>
+    : T extends number | string | boolean | Function ? LeafSignal<T>
         : unknown;
 
-type NestedSignal<T> = T extends object ? SignalNode<T> & { [K in keyof T]: T[K] & {value?: T[K]} }
+type NestedSignal<T> = T extends object ? NodeSignal<T> & { [K in keyof T]: T[K] & { value?: T[K] } }
     : T extends number | string | boolean | Function ? T
         : unknown;
 
