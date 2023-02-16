@@ -2,7 +2,7 @@ import Observer from "./Observer";
 import ObserverStack from "./ObserverStack";
 import {Batch} from "./batch";
 
-const debug = (...args: any[]) => {}; // console.log;
+const debug = (..._: any[]) => {}; // console.log;
 
 abstract class AbstractSignal<T> {
   protected _value: T;
