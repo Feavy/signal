@@ -5,11 +5,14 @@
 *Still under development.*
 
 ***Signal*** is a lightweight library that allows to easily add reactivity to programs, so they can react to variable updates in real-time.  
-Inspired by [https://github.com/fynyky/reactor.js/](reactor.js) and [https://github.com/solidjs/solid](solid), **Signal** is based on a system of signals and observers.
+Inspired by [reactor.js](https://github.com/fynyky/reactor.js/) and [solid](https://github.com/solidjs/solid), **Signal** is based on a system of signals and observers.
 
 Here is a simple example of how to use it:
 
 ```ts
+import Signal from '@feavy/signal/Signal';
+import { observe } from '@feavy/signal/Observer';
+
 interface Vec2 { x: number; y: number; }
 
 const position: Signal<Vec2> = new Signal({x: 0, y: 0});
@@ -38,7 +41,7 @@ It is important to know that a **signal** is not a **`stream`** : it is not poss
 
 However, streams may be added in a future version.
 
-## Getting started
+## Usage
 
 ### Declaring a Signal
 
@@ -76,7 +79,7 @@ observe(() => {
 
 In this way `entity.health` acts as a normal integer property, which can be observed.
 
-## Object value
+### Object value
 
 It is also possible to make an object observable.
 
@@ -97,7 +100,7 @@ Signal<{
 
 Also note that the signal acts as a proxy for every object property. So instead of writing **`position.value.x`**, you can simply write **`position.x`**, which will return the same value.
 
-## Nested objects
+### Nested objects
 
 In the case of nested objects, if you access an object attribute, you actually get a **signal** that matches the object’s interface:
 
