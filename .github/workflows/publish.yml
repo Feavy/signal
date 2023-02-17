@@ -7,6 +7,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.ref_name }}
       # Setup .npmrc file to publish to npm
       - uses: actions/setup-node@v3
         with:
@@ -18,8 +20,7 @@ jobs:
       - run: npm version $GITHUB_REF_NAME -m "[RELEASE] %s"
       - run: npm run build
       - run: cp package.json dist
-      - run: cd dist
-      - run: npm publish
+      - run: cd dist && npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - run: git push --follow-tags
+      - run: git push origin
