@@ -7,9 +7,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-        with:
-          ref: ${{ github.ref_name }}
-      # Setup .npmrc file to publish to npm
       - uses: actions/setup-node@v3
         with:
           node-version: '16.x'
@@ -19,8 +16,10 @@ jobs:
           git config --local user.name "GitHub"
       - run: npm version $GITHUB_REF_NAME -m "[RELEASE] %s"
       - run: npm run build
-      - run: cp package.json dist
+      - run: |
+          cp package.json dist
+          cp README.md dist
       - run: cd dist && npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - run: git push origin
+      - run: git push origin HEAD:main
