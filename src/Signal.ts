@@ -183,6 +183,12 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
       get: () => rootSignal.value,
       set: (newValue: T) => rootSignal.value = newValue
     });
+    Object.defineProperty(object, 'unwrapped', {
+      get: () => rootSignal.unwrapped
+    });
+    Object.defineProperty(object, '__signal__', {
+      value: rootSignal
+    });
     for (const key in object) {
       const value = object[key];
       if(typeof value === 'function') {
@@ -274,5 +280,13 @@ const Signal: new <T>(data: T) => Signal<T> = NodeOrLeafSignal as any;
 export default Signal;
 
 export function signalify<T extends object>(object: T): NestedSignal<T> {
+  if(isSignal(object)) {
+    return object as NestedSignal<T>;
+  }
   return NodeSignal.signalify(object);
+}
+
+//@ts-ignore
+export function isSignal<T>(obj: T): obj is Signal<T> {
+  return obj instanceof Signal || (obj as any)["__signal__"];
 }
