@@ -1,8 +1,8 @@
 import Observer from "./Observer";
 
-export module Batch {
+module Batch {
   const observers: Set<Observer> = new Set();
-  let _batches: number = 0;
+  let batches: number = 0;
 
   export function add(observer: Observer) {
     observers.add(observer);
@@ -13,24 +13,26 @@ export module Batch {
   }
 
   export function start() {
-    _batches++;
+    batches++;
   }
 
   export function end() {
-    _batches--;
-    if(_batches <= 0) {
-      _batches = 0;
+    batches--;
+    if (batches <= 0) {
+      batches = 0;
       observers.forEach(observer => observer.trigger());
       observers.clear();
     }
   }
 
   export function isBatching() {
-    return _batches > 0;
+    return batches > 0;
   }
 }
 
-export default function batch(callback: () => void) {
+export default Batch;
+
+export function batch(callback: () => void) {
   Batch.start();
   callback();
   Batch.end();

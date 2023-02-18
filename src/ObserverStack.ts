@@ -2,6 +2,7 @@ import type Observer from "./Observer";
 
 module ObserverStack {
   const dependencyStack: Observer[] = [];
+
   export function push(observer: Observer) {
     dependencyStack.push(observer);
   }

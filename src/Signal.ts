@@ -1,8 +1,9 @@
 import Observer, {Observable} from "./Observer";
 import ObserverStack from "./ObserverStack";
-import {Batch} from "./batch";
+import Batch from "./Batch";
 
-const debug = (..._: any[]) => {}; // console.log;
+const debug = (..._: any[]) => {
+}; // console.log;
 
 function getMethods<T>(obj: T): (keyof T)[] {
   let properties = new Set()
@@ -76,7 +77,7 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
       this._properties.set(key, new NodeOrLeafSignal(value, this));
     }
 
-    for(const method of getMethods(initialValue)) {
+    for (const method of getMethods(initialValue)) {
       const original = initialValue[method] as (...args: any[]) => any;
       this._methods.set(method, (...args: any[]) => {
         Batch.start();
@@ -98,7 +99,7 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
           return signal!.value;
         }
         const method = target._methods.get(prop as keyof T);
-        if(method) {
+        if (method) {
           return method;
         }
         return (target as any)[prop] || (initialValue as any)[prop];
@@ -191,7 +192,7 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
     });
     for (const key in object) {
       const value = object[key];
-      if(typeof value === 'function') {
+      if (typeof value === 'function') {
         continue;
       }
       Object.defineProperty(object, "_" + key, {
@@ -209,7 +210,7 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
         }
       });
     }
-    for(const method of getMethods(object)) {
+    for (const method of getMethods(object)) {
       const methodSignal = rootSignal._methods.get(method);
       Object.defineProperty(object, method, {
         value: methodSignal
@@ -280,7 +281,7 @@ const Signal: new <T>(data: T) => Signal<T> = NodeOrLeafSignal as any;
 export default Signal;
 
 export function signalify<T extends object>(object: T): NestedSignal<T> {
-  if(isSignal(object)) {
+  if (isSignal(object)) {
     return object as NestedSignal<T>;
   }
   return NodeSignal.signalify(object);
