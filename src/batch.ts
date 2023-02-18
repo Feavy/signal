@@ -2,7 +2,7 @@ import Observer from "./Observer";
 
 export module Batch {
   const observers: Set<Observer> = new Set();
-  let _isBatching = false;
+  let _batches: number = 0;
 
   export function add(observer: Observer) {
     observers.add(observer);
@@ -13,17 +13,20 @@ export module Batch {
   }
 
   export function start() {
-    _isBatching = true;
+    _batches++;
   }
 
   export function end() {
-    _isBatching = false;
-    observers.forEach(observer => observer.trigger());
-    observers.clear();
+    _batches--;
+    if(_batches <= 0) {
+      _batches = 0;
+      observers.forEach(observer => observer.trigger());
+      observers.clear();
+    }
   }
 
   export function isBatching() {
-    return _isBatching;
+    return _batches > 0;
   }
 }
 

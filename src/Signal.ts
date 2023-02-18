@@ -4,6 +4,15 @@ import {Batch} from "./batch";
 
 const debug = (..._: any[]) => {}; // console.log;
 
+function getMethods<T>(obj: T): (keyof T)[] {
+  let properties = new Set()
+  let currentObj = obj
+  do {
+    Object.getOwnPropertyNames(currentObj).map(item => properties.add(item))
+  } while ((currentObj = Object.getPrototypeOf(currentObj)) && Object.getPrototypeOf(currentObj))
+  return [...properties.keys()].filter(item => typeof obj[item as (keyof T)] === 'function' && item !== "constructor") as (keyof T)[]
+}
+
 abstract class AbstractSignal<T> {
   protected _value: T;
   protected _parent?: NodeSignal<any>;
@@ -56,6 +65,7 @@ abstract class AbstractSignal<T> {
 
 class NodeSignal<T extends object> extends AbstractSignal<T> {
   private readonly _properties: Map<keyof T, Signal<any>> = new Map();
+  private readonly _methods: Map<keyof T, (...args: any[]) => any> = new Map();
   private readonly _proxy;
 
   public constructor(initialValue: T, parent?: NodeSignal<any>) {
@@ -64,6 +74,16 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
     for (const key in initialValue) {
       const value = initialValue[key];
       this._properties.set(key, new NodeOrLeafSignal(value, this));
+    }
+
+    for(const method of getMethods(initialValue)) {
+      const original = initialValue[method] as (...args: any[]) => any;
+      this._methods.set(method, (...args: any[]) => {
+        Batch.start();
+        const result = original.apply(this._proxy, args);
+        Batch.end();
+        return result;
+      });
     }
 
     this._proxy = new Proxy(this, {
@@ -77,7 +97,11 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
           debug("get leaf prop", prop);
           return signal!.value;
         }
-        return (target as any)[prop];
+        const method = target._methods.get(prop as keyof T);
+        if(method) {
+          return method;
+        }
+        return (target as any)[prop] || (initialValue as any)[prop];
       },
       set(target: NodeSignal<T>, prop: string | symbol, newValue: any, _: any): boolean {
         const signal = target._properties.get(prop as keyof T);
@@ -117,10 +141,7 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
       this.removeObserver(observer);
     }
 
-    const newBatch = !Batch.isBatching();
-
-    // Only start a new batch if we are not already batching (in case of nested signals)
-    if (newBatch) Batch.start();
+    Batch.start();
 
     for (const key in newValue) {
       const value = newValue[key];
@@ -128,10 +149,10 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
       this._properties.get(key)!.value = value;
     }
 
-    if (newBatch) Batch.end();
+    Batch.end();
   }
 
-  public get value(): T & {unwrapped?: T} {
+  public get value(): T & { unwrapped?: T } {
     debug("get this value", this._value);
 
     const observer = ObserverStack.current();
@@ -140,7 +161,7 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
       this.addObserver(observer);
     }
     debug("this", this);
-    return this._proxy as unknown as T & {unwrapped?: T};
+    return this._proxy as unknown as T & { unwrapped?: T };
   }
 
   public get unwrapped() {
@@ -154,6 +175,41 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
       console.log(indent + " " + (key as string) + " :");
       signal.debug(indent + "  ");
     }
+  }
+
+  public static signalify<T extends object>(object: T): NestedSignal<T> {
+    const rootSignal = new NodeSignal(object);
+    Object.defineProperty(object, 'value', {
+      get: () => rootSignal.value,
+      set: (newValue: T) => rootSignal.value = newValue
+    });
+    for (const key in object) {
+      const value = object[key];
+      if(typeof value === 'function') {
+        continue;
+      }
+      Object.defineProperty(object, "_" + key, {
+        value: value,
+        writable: true
+      });
+      delete object[key];
+      const signal = rootSignal._properties.get(key);
+      Object.defineProperty(object, key, {
+        get: () => signal.value,
+        set: (newValue) => {
+          //@ts-ignore
+          object["_" + key] = newValue;
+          signal.value = newValue
+        }
+      });
+    }
+    for(const method of getMethods(object)) {
+      const methodSignal = rootSignal._methods.get(method);
+      Object.defineProperty(object, method, {
+        value: methodSignal
+      });
+    }
+    return object as NestedSignal<T>;
   }
 }
 
@@ -216,3 +272,7 @@ type NestedSignal<T> = T extends object ? NodeSignal<T> & { [K in keyof T]: T[K]
 
 const Signal: new <T>(data: T) => Signal<T> = NodeOrLeafSignal as any;
 export default Signal;
+
+export function signalify<T extends object>(object: T): NestedSignal<T> {
+  return NodeSignal.signalify(object);
+}
