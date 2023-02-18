@@ -1,7 +1,7 @@
 {
   "name": "@feavy/signal",
   "private": false,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Reactive signals for JavaScript [WIP]",
   "scripts": {
     "build": "tsc"
