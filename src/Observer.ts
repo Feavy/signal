@@ -2,10 +2,10 @@ import Signal from "./Signal";
 import ObserverStack from "./ObserverStack";
 
 export default class Observer {
-  private readonly _callback: () => void;
+  private readonly _callback?: () => void;
   private readonly observedSignals = new Set<Signal<any>>();
 
-  public constructor(callback: () => void) {
+  public constructor(callback?: () => void) {
     this._callback = callback;
   }
 
@@ -25,7 +25,7 @@ export default class Observer {
     ObserverStack.push(this);
     this.clearSignals();
     // When calling the callback, signals add themselves to the observer
-    this._callback();
+    this._callback && this._callback();
     ObserverStack.pop();
     for (const signal of this.observedSignals) {
       signal.removeDuplicatedObservers();
@@ -39,4 +39,16 @@ export function observe(callback: () => void) {
   const observer = new Observer(callback);
   observer.trigger();
   return observer;
+}
+
+try {
+  Object.defineProperty(globalThis, "observe", {
+    get: () => {
+      console.log("Before observe");
+      const observer = new Observer();
+      ObserverStack.push(observer);
+      return observe;
+    }
+  });
+} catch (ignored) {
 }

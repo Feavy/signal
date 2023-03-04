@@ -73,6 +73,10 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
     super(initialValue, parent);
 
     for (const key in initialValue) {
+      if(initialValue[key] instanceof Array){
+        continue;
+      }
+      console.log("prop", key, initialValue[key], typeof initialValue[key] === "object")
       const value = initialValue[key];
       this._properties.set(key, new NodeOrLeafSignal(value, this));
     }
@@ -81,7 +85,10 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
       const original = initialValue[method] as (...args: any[]) => any;
       this._methods.set(method, (...args: any[]) => {
         Batch.start();
+        console.log("call method", method, args)
         const result = original.apply(this._proxy, args);
+        Batch.addAll(this.observers);
+        console.log(this.observers)
         Batch.end();
         return result;
       });
@@ -111,6 +118,12 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
           debug("set", prop, newValue);
           value[prop] = newValue;
           return signal.value = newValue;
+        }else if(!target[prop]){
+          const signal = new LeafSignal(newValue, target);
+          target._properties.set(prop as keyof T, signal);
+          value[prop] = newValue;
+          target.triggerObservers();
+          // return signal.value = newValue;
         }
         return (target as any)[prop] = newValue;
       }
@@ -178,7 +191,7 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
     }
   }
 
-  public static signalify<T extends object>(object: T): NestedSignal<T> {
+  public static signalify<T extends object>(object: T): Signal<T> {
     const rootSignal = new NodeSignal(object);
     Object.defineProperty(object, 'value', {
       get: () => rootSignal.value,
@@ -191,6 +204,9 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
       value: rootSignal
     });
     for (const key in object) {
+      if(key === "_parent") {
+        continue;
+      }
       const value = object[key];
       if (typeof value === 'function') {
         continue;
@@ -199,14 +215,22 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
         value: value,
         writable: true
       });
+      let signal: Signal<any>;
       delete object[key];
-      const signal = rootSignal._properties.get(key);
+      if(typeof value === 'object') {
+        signal = NodeSignal.signalify(value as object);
+        rootSignal._properties.delete(key);
+        rootSignal._properties.set(key, signal);
+        signal._parent = rootSignal;
+      } else {
+        signal = rootSignal._properties.get(key);
+      }
       Object.defineProperty(object, key, {
         get: () => signal.value,
         set: (newValue) => {
           //@ts-ignore
           object["_" + key] = newValue;
-          signal.value = newValue
+          // signal.value = newValue
         }
       });
     }
@@ -216,7 +240,7 @@ class NodeSignal<T extends object> extends AbstractSignal<T> {
         value: methodSignal
       });
     }
-    return object as NestedSignal<T>;
+    return rootSignal as Signal<T>;
   }
 }
 
@@ -273,7 +297,7 @@ type Signal<T> = T extends object ? NestedSignal<T>
     : T extends number | string | boolean | Function ? LeafSignal<T>
         : unknown;
 
-type NestedSignal<T> = T extends object ? NodeSignal<T> & { [K in keyof T]: T[K] & { value?: T[K] } }
+type NestedSignal<T> = T extends object ? NodeSignal<T> & { [K in keyof T]: T[K] & { unwrapped?: T[K], value?: T[K] } }
     : T extends number | string | boolean | Function ? T
         : unknown;
 
