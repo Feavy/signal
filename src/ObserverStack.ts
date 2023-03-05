@@ -3,6 +3,10 @@ import type Observer from "./Observer";
 module ObserverStack {
   const dependencyStack: Observer[] = [];
 
+  export function isObserving(): boolean {
+    return dependencyStack.length > 0;
+  }
+
   export function push(observer: Observer) {
     dependencyStack.push(observer);
   }
