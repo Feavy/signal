@@ -2,6 +2,15 @@ import Observer from "./Observer";
 import ObserverStack from "./ObserverStack";
 import Batch from "./Batch";
 
+function getMethods<T>(obj: T): (keyof T)[] {
+  let properties = new Set()
+  let currentObj = obj
+  do {
+    Object.getOwnPropertyNames(currentObj).map(item => properties.add(item))
+  } while ((currentObj = Object.getPrototypeOf(currentObj)) && Object.getPrototypeOf(currentObj))
+  return [...properties.keys()].filter(item => typeof obj[item as (keyof T)] === 'function' && item !== "constructor") as (keyof T)[]
+}
+
 let debug = (..._: any[]) => {};
 
 export class Signal<T> {
@@ -76,12 +85,16 @@ export class Signal<T> {
       }
 
       Batch.start();
+      /*
+      TODO : there are two possibilities here:
+      1. Keeping the same object reference, but updating its properties (the current implementation)
+         Not the classical behavior, but it's more the reactive way to keep the same reference I think
+      2. Replacing the object with the new value
+         Needs to signalify the properties of the new value that were observed in the past one
+         and move the observers from the old signals to the new ones
+       */
       for (const key in newValue) {
         this._value[key] = newValue[key];
-        // same as:
-        // if(this._properties.has(key)) {
-        //   this._properties.get(key)!.value = newValue[key];
-        // }
       }
       Batch.end();
     } else {
@@ -123,6 +136,7 @@ export default function signalify<T>(value: T, name: string = "root", parent?: S
 }
 
 function signalifyObject<T extends object>(value: T, name: string, parent?: Signal<any>): Signalified<T> {
+  // TODO: check if value is already signalified
   const thisSignal = new Signal(value, name, parent);
 
   for (const key in value) {
@@ -147,6 +161,23 @@ function signalifyObject<T extends object>(value: T, name: string, parent?: Sign
           signal.value = newValue;
         }
       }
+    });
+  }
+
+  // Enable batching between all method calls
+  // TODO : Do not update methods that have already been replaced
+  for(const method of getMethods(value)) {
+    console.log("method", method)
+    const original = (value[method] as (...args: any[]) => any).bind(value);
+    const replacement = (...args: any[]) => {
+      Batch.start();
+      const result = original.apply(value, args);
+      Batch.end();
+      return result;
+    }
+
+    Object.defineProperty(value, method, {
+      value: replacement
     });
   }
 
