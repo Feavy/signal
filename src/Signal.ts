@@ -137,14 +137,29 @@ export default function signalify<T>(value: T, name: string = "root", parent?: S
 
 function signalifyObject<T extends object>(value: T, name: string, parent?: Signal<any>): Signalified<T> {
   // TODO: check if value is already signalified
+
+  if("_signal" in value) {
+    return value as Signalified<T>;
+  }
+
   const thisSignal = new Signal(value, name, parent);
 
+  Object.defineProperty(value, "_signal", {
+    value: thisSignal
+  });
+
   for (const key in value) {
+    if(key === "_signal") {
+      continue;
+    }
     let prop = value[key];
     let signal: Signal<any>;
 
     Object.defineProperty(value, key, {
       get() {
+        if(prop && isSignalified(prop)) {
+          signal = prop._signal;
+        }
         if (!signal) {
           if(!ObserverStack.current()) {
             return prop;
@@ -167,7 +182,6 @@ function signalifyObject<T extends object>(value: T, name: string, parent?: Sign
   // Enable batching between all method calls
   // TODO : Do not update methods that have already been replaced
   for(const method of getMethods(value)) {
-    console.log("method", method)
     const original = (value[method] as (...args: any[]) => any).bind(value);
     const replacement = (...args: any[]) => {
       Batch.start();
@@ -181,10 +195,6 @@ function signalifyObject<T extends object>(value: T, name: string, parent?: Sign
     });
   }
 
-  Object.defineProperty(value, "_signal", {
-    value: thisSignal
-  });
-
   return value as Signalified<T>;
 }
 
@@ -197,7 +207,7 @@ function signalifyValue<T extends number | boolean | string | Function | bigint>
 }
 
 function isSignalified(value: any): value is Signalified<any> {
-  return "_signal" in value;
+  return typeof value === "object" && "_signal" in value;
 }
 
 type Signalified<T> = T extends object ? T & {
